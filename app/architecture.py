@@ -1,5 +1,21 @@
 import os
 import ast
+import networkx as nx
+import matplotlib.pyplot as plt
+
+def visualize_graph(graph):
+
+    G = nx.DiGraph()
+
+    for file, imports in graph.items():
+
+        for imp in imports:
+            G.add_edge(file, imp)
+
+    nx.draw(G, with_labels=True, node_size=2000, node_color="lightblue")
+
+    plt.show()
+    
 
 def build_dependency_graph(repo_path):
 

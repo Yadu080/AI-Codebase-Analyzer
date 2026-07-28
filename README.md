@@ -1,260 +1,177 @@
+# AI Codebase Analyzer
 
+AI Codebase Analyzer explores GitHub repositories with **Retrieval-Augmented Generation (RAG)**.
 
-<h1 align="center" style="font-family: 'Georgia', 'Times New Roman', serif;">
-AI Codebase Analyzer
-</h1>
-
-<p align="center">
-A Retrieval-Augmented Generation system for understanding and analyzing software repositories.
-</p>
-
----
-## Technologies Used
-
-<p align="center"> <img src="https://skillicons.dev/icons?i=python,fastapi,streamlit" /> </p> <p align="center"> <img src="https://img.shields.io/badge/FAISS-Vector%20Search-blue?style=for-the-badge" /> <img src="https://img.shields.io/badge/SentenceTransformers-Embeddings-green?style=for-the-badge" /> <img src="https://img.shields.io/badge/Groq-LLM-orange?style=for-the-badge" /> <img src="https://img.shields.io/badge/Python-AST-lightgrey?style=for-the-badge" /> </p>
----
-
-The system analyzes a GitHub repository by cloning it, extracting source files, generating semantic embeddings for code chunks, and indexing them using FAISS. When a user asks a question, the system retrieves the most relevant code segments and provides an explanation using a language model.
-
-This project demonstrates how vector search and language models can be combined to analyze and explain large codebases.
+It clones a public repo, chunks source files, embeds them with SentenceTransformers (`all-MiniLM-L6-v2`), indexes vectors in FAISS (`IndexFlatL2`), retrieves the nearest chunks for a question, and explains them with Groq (`llama-3.3-70b-versatile`).
 
 ---
 
 ## Features
 
-- Analyze any public GitHub repository
-- Extract and process source code files
-- Generate semantic embeddings for code
-- Vector similarity search using FAISS
-- Question answering about repository code
-- Repository summary (languages, files, modules)
-- Optional AST-based dependency analysis
-- Web interface built with Streamlit
+- Analyze public GitHub repositories
+- Semantic code search with FAISS
+- Grounded Q&A via Groq
+- Repository summary + Python import graph
+- **Modern Next.js UI** (Vercel-ready)
+- Optional Streamlit UI for quick local demos
 
 ---
 
-## System Architecture
+## Architecture
 
-The system consists of three main layers:
+```
+Browser (Next.js on Vercel)
+        │  HTTPS
+        ▼
+FastAPI backend (local / Render / Railway / Fly)
+        │
+        ├── Git clone
+        ├── Chunk (500 chars)
+        ├── Embed (MiniLM 384-d)
+        ├── FAISS IndexFlatL2
+        └── Groq LLM
+```
 
-Frontend  
-Streamlit interface for interacting with the system.
-
-Backend  
-FastAPI service responsible for repository processing, vector indexing, and answering questions.
-
-AI Pipeline  
-A Retrieval Augmented Generation (RAG) pipeline that retrieves relevant code context before generating responses.
+> **Note:** The heavy ML stack (SentenceTransformers + FAISS) cannot run inside Vercel serverless. Deploy the **UI on Vercel** and the **API on a Python host**.
 
 ---
 
-## Architecture Diagram
+## Project structure
 
 ```
-User
- │
- ▼
-Streamlit Frontend
- │
- ▼
-FastAPI Backend
- │
- ├── Repository Loader
- ├── Code Parser
- ├── Code Chunker
- ├── Embedding Generator
- │
- ▼
-FAISS Vector Index
- │
- ▼
-Retriever
- │
- ▼
-LLM (Groq API)
- │
- ▼
-Generated Explanation
-```
-
----
-
-## RAG Pipeline
-
-The question answering process uses a Retrieval Augmented Generation architecture.
-
-```
-User Question
-      │
-      ▼
-Embed Question
-      │
-      ▼
-Vector Search (FAISS)
-      │
-      ▼
-Retrieve Relevant Code Chunks
-      │
-      ▼
-Send Context + Question to LLM
-      │
-      ▼
-Generate Answer
-```
-
-This approach ensures the language model answers using actual code from the repository.
-
----
-
-## Repository Processing Pipeline
-
-When a repository is analyzed, the system performs the following steps:
-
-```
-GitHub Repository URL
-        │
-        ▼
-Clone Repository
-        │
-        ▼
-Load Source Files
-        │
-        ▼
-Chunk Code into Segments
-        │
-        ▼
-Generate Embeddings
-        │
-        ▼
-Store Embeddings in FAISS Index
-        │
-        ▼
-Repository Ready for Queries
-```
-
----
-
-## Architecture Analysis
-
-The project also includes a static analysis component using Python AST.
-
-```
-Python Files
-      │
-      ▼
-AST Parsing
-      │
-      ▼
-Extract Import Relationships
-      │
-      ▼
-Build Dependency Graph
-```
-
-This provides a high-level view of how modules in the repository interact.
-
----
-
-## Project Structure
-
-```
-ai-codebase-analyzer
-│
-├── app
-│   ├── repo_loader.py
-│   ├── code_parser.py
-│   ├── chunker.py
-│   ├── embedder.py
-│   ├── vector_store.py
-│   ├── retriever.py
-│   ├── qa_engine.py
-│   ├── repo_summary.py
-│   ├── architecture.py
-│   └── api.py
-│
-├── data
-│
-├── frontend.py
+ai-codebase-analyzer/
+├── app/                 # FastAPI RAG backend
+├── web/                 # Next.js frontend (deploy to Vercel)
+├── frontend.py          # Optional Streamlit UI
 ├── requirements.txt
 ├── run.sh
-├── .gitignore
-└── .env
+└── .env.example
 ```
 
 ---
 
-## Setup
+## Local setup
 
-Clone the repository and install dependencies.
+### 1. Backend
 
-```
-git clone <repository_url>
-cd ai-codebase-analyzer
+```bash
+python -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env       # set GROQ_API_KEY
+uvicorn app.api:app --reload --port 8000
 ```
 
-Create a `.env` file containing your Groq API key.
+### 2. Frontend (Next.js)
 
+```bash
+cd web
+cp .env.local.example .env.local   # NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+npm install
+npm run dev
 ```
-GROQ_API_KEY=your_api_key
-```
 
----
+Open [http://localhost:3000](http://localhost:3000).
 
-## Running the Application
+### One-command (API + Next.js)
 
-You can start both backend and frontend with a single command:
-
-```
+```bash
+cd web && npm install && cd ..
 ./run.sh
 ```
 
-Or run them separately.
+### Optional Streamlit UI
 
-Start the backend:
-
-```
-uvicorn app.api:app --reload
-```
-
-Start the frontend:
-
-```
+```bash
 streamlit run frontend.py
 ```
 
-The Streamlit interface will open in your browser.
+---
+
+## Deploy on Vercel (frontend)
+
+1. Push this repo to GitHub.
+2. Go to [vercel.com/new](https://vercel.com/new) → import the repo.
+3. Set **Root Directory** to `web`.
+4. Add environment variable:
+   - `NEXT_PUBLIC_API_URL` = your public FastAPI URL  
+     Example: `https://ai-codebase-analyzer-api.onrender.com`
+5. Deploy.
+
+The Vercel project settings should look like:
+
+| Setting | Value |
+|---|---|
+| Framework | Next.js |
+| Root Directory | `web` |
+| Build Command | `npm run build` (default) |
+| Output | Next.js default |
+
+Config files used:
+
+- `web/vercel.json`
+- `web/package.json`
+- `web/.env.local.example`
+
+### Deploy the API (required for live analyze/ask)
+
+Pick any Python host (Render, Railway, Fly.io, a VPS):
+
+```bash
+uvicorn app.api:app --host 0.0.0.0 --port $PORT
+```
+
+Set secrets on the API host:
+
+| Variable | Purpose |
+|---|---|
+| `GROQ_API_KEY` | Groq LLM access |
+| `CORS_ORIGINS` | Your Vercel URL(s), comma-separated |
+
+Example:
+
+```
+CORS_ORIGINS=https://your-app.vercel.app,https://your-app-git-main.vercel.app
+```
+
+Without a public API URL, the Vercel site still **loads and looks polished**; Analyze/Ask will fail until the backend is reachable.
 
 ---
 
-## Screenshot
+## API endpoints
 
-[![Screenshot-2026-03-04-at-10-22-45-PM.png](https://i.postimg.cc/7hbnpZPf/Screenshot-2026-03-04-at-10-22-45-PM.png)](https://postimg.cc/xNDmmYz2)
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/health` | Liveness + whether an index is loaded |
+| POST | `/analyze` | Clone + index a repo |
+| POST | `/ask` | Question → retrieved chunks → LLM answer |
+| POST | `/architecture` | Python AST import graph |
 
-
-## Example Usage
-
-1. Enter a GitHub repository URL
-2. Click **Analyze Repository**
-3. Ask questions about the codebase
-
-Example questions:
-
-- How does routing work in this project?
-- Where is authentication implemented?
-- What modules are responsible for handling requests?
+Interactive docs: `http://127.0.0.1:8000/docs`
 
 ---
 
+## Tech stack
 
+| Layer | Tech |
+|---|---|
+| UI | Next.js 14, React, TypeScript |
+| API | FastAPI, Uvicorn |
+| Embeddings | SentenceTransformers `all-MiniLM-L6-v2` |
+| Vectors | FAISS `IndexFlatL2` |
+| LLM | Groq `llama-3.3-70b-versatile` |
+| Deploy UI | Vercel |
+
+---
 
 ## Limitations
 
-- The vector index is stored in memory, so restarting the server requires re-indexing the repository.
-- The system currently focuses on Python repositories for best results.
+- Vector index is **in-memory** (lost on API restart)
+- Best results on repos with supported source extensions
+- Backend must run where Git + ML deps are available (not Vercel Functions)
 
 ---
 
-## Purpose
+## Author
 
-This project is intended as a demonstration of how Retrieval Augmented Generation can be applied to source code analysis and developer tooling.
+Yadunandan M Nimbalkar — [github.com/Yadu080](https://github.com/Yadu080)
