@@ -13,3 +13,5 @@ services:
         sync: false
       - key: CORS_ORIGINS
         value: https://your-app.vercel.app
+      - key: MAX_CHUNKS
+        value: "1500"
