@@ -1,0 +1,16 @@
+# Lean dependency set for deploying just the FastAPI backend (Render,
+# Hugging Face Spaces, Railway, Fly, a VPS, etc). Leaves out Streamlit and
+# the matplotlib/networkx visualization extras that the API never imports,
+# to keep the deployed image smaller and lower the process's baseline RAM.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+
+fastapi
+uvicorn[standard]
+requests
+gitpython
+sentence-transformers
+faiss-cpu
+numpy
+groq
+python-dotenv

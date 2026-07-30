@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   analyzeRepo,
   askQuestion,
@@ -14,6 +14,38 @@ const EXAMPLE_QUESTIONS = [
   "Where is authentication handled?",
   "What is the main entry point?",
 ];
+
+function useCountUp(target: number, duration = 900) {
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    if (!target) {
+      setValue(0);
+      return;
+    }
+    let start: number | null = null;
+    let raf = 0;
+
+    const step = (ts: number) => {
+      if (start === null) start = ts;
+      const progress = Math.min((ts - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.round(eased * target));
+      if (progress < 1) raf = requestAnimationFrame(step);
+    };
+
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+
+  return value;
+}
+
+function handleSpotlight(e: React.MouseEvent<HTMLElement>) {
+  const rect = e.currentTarget.getBoundingClientRect();
+  e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+  e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
+}
 
 export function AnalyzerApp() {
   const [repoUrl, setRepoUrl] = useState("https://github.com/pallets/flask");
@@ -36,6 +68,8 @@ export function AnalyzerApp() {
   const [asking, setAsking] = useState(false);
 
   const ready = Boolean(summary);
+  const filesCount = useCountUp(summary?.total_files ?? 0);
+  const chunksCount = useCountUp(summary?.total_chunks ?? 0);
   const apiHost = useMemo(() => {
     try {
       return new URL(getApiUrl()).host;
@@ -175,7 +209,7 @@ export function AnalyzerApp() {
       </section>
 
       <main className="workspace">
-        <section className="panel">
+        <section className="panel" onMouseMove={handleSpotlight}>
           <div className="panel-head">
             <div>
               <div className="step-label">Step 01</div>
@@ -219,11 +253,11 @@ export function AnalyzerApp() {
                 <div className="metrics">
                   <div className="metric">
                     <div className="metric-label">Total files</div>
-                    <div className="metric-value">{summary.total_files}</div>
+                    <div className="metric-value">{filesCount}</div>
                   </div>
                   <div className="metric">
                     <div className="metric-label">Total chunks</div>
-                    <div className="metric-value">{summary.total_chunks}</div>
+                    <div className="metric-value">{chunksCount}</div>
                   </div>
                   <div className="metric">
                     <div className="metric-label">Languages</div>
@@ -265,7 +299,7 @@ export function AnalyzerApp() {
           </div>
         </section>
 
-        <section className="panel">
+        <section className="panel" onMouseMove={handleSpotlight}>
           <div className="panel-head">
             <div>
               <div className="step-label">Step 02</div>

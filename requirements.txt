@@ -1,3 +1,11 @@
+# CPU-only PyTorch wheel: sentence-transformers depends on torch, and the
+# default PyPI wheel drags in ~1-2GB of unused CUDA/NVIDIA libraries even on
+# machines with no GPU. Pinning the CPU build here keeps installs smaller and
+# avoids extra resident memory from unused CUDA driver stubs — same model,
+# same results, just lighter.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+
 fastapi
 uvicorn
 streamlit

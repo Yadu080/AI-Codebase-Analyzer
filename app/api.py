@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import gc
 import os
 
 from app.repo_loader import clone_repository
@@ -37,6 +38,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Caps peak memory on RAM-constrained hosts (e.g. Render's 512MB free tier)
+# by bounding how many chunks get embedded and held in memory at once.
+MAX_CHUNKS = int(os.getenv("MAX_CHUNKS", "4000"))
 
 
 class RepoRequest(BaseModel):
@@ -83,8 +89,14 @@ def analyze_repo(request: RepoRequest):
             detail="No supported source files found (.py, .js, .ts, .java, .cpp, .c)",
         )
 
+    truncated = len(chunks) > MAX_CHUNKS
+    if truncated:
+        chunks = chunks[:MAX_CHUNKS]
+
     embeddings = embed_chunks(chunks)
     index = build_index(embeddings)
+    del embeddings
+    gc.collect()
 
     pipeline["chunks"] = chunks
     pipeline["index"] = index
@@ -92,8 +104,12 @@ def analyze_repo(request: RepoRequest):
     summary = generate_repo_summary(repo_path, chunks)
     pipeline["summary"] = summary
 
+    message = "Repository indexed successfully"
+    if truncated:
+        message += f" (truncated to first {MAX_CHUNKS} chunks to stay within host memory limits)"
+
     return {
-        "message": "Repository indexed successfully",
+        "message": message,
         "chunks": len(chunks),
         "summary": summary,
     }
