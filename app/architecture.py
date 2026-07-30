@@ -1,9 +1,12 @@
 import os
 import ast
-import networkx as nx
-import matplotlib.pyplot as plt
 
 def visualize_graph(graph):
+    # Imported lazily: only this optional local-visualization helper needs
+    # networkx/matplotlib, and the API never calls it — keeping the import
+    # out of module load keeps the deployed API process lighter.
+    import networkx as nx
+    import matplotlib.pyplot as plt
 
     G = nx.DiGraph()
 
