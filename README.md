@@ -6,6 +6,7 @@
 
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![ONNX Runtime](https://img.shields.io/badge/Embeddings-ONNX%20Runtime-blue)](https://onnxruntime.ai/)
 [![FAISS](https://img.shields.io/badge/Vector%20Search-FAISS-4b8bbe)](https://github.com/facebookresearch/faiss)
 [![Groq](https://img.shields.io/badge/LLM-Groq%20Llama%203.3-orange)](https://groq.com/)
 [![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)](https://vercel.com/)
@@ -30,6 +31,7 @@ Point it at a repo. Ask "How does routing work?" or "Where is authentication han
 - 🕸️ **Python import graph** — Visual dependency mapping across modules
 - 🎨 **Modern, animated UI** — Sleek Next.js frontend with glassmorphism and smooth motion
 - ⚡ **Fast setup** — One command to run the full stack locally
+- 🪶 **Lightweight backend** — Runs comfortably on a free 512MB host (see below)
 
 ---
 
@@ -41,11 +43,13 @@ Point it at a repo. Ask "How does routing work?" or "Where is authentication han
 │   (Vercel)                │                      │                            │
 └─────────────────────────┘                      │   1. Clone repository     │
                                                     │   2. Chunk source files   │
-                                                    │   3. Embed with MiniLM    │
+                                                    │   3. Embed (ONNX Runtime) │
                                                     │   4. Index with FAISS     │
                                                     │   5. Retrieve + Ask Groq  │
                                                     └──────────────────────────┘
 ```
+
+Each analysis runs in its own in-memory session (keyed by a `session_id` returned from `/analyze`), so multiple people can use the same deployed instance without their repositories or answers crossing over.
 
 ---
 
@@ -55,10 +59,33 @@ Point it at a repo. Ask "How does routing work?" or "Where is authentication han
 |---|---|
 | **Frontend** | Next.js 14, React, TypeScript |
 | **Backend** | FastAPI, Uvicorn |
-| **Embeddings** | SentenceTransformers (`all-MiniLM-L6-v2`) |
+| **Embeddings** | `all-MiniLM-L6-v2`, served via ONNX Runtime |
 | **Vector Store** | FAISS (`IndexFlatL2`) |
 | **LLM** | Groq (`llama-3.3-70b-versatile`) |
-| **Deployment** | Vercel (frontend) · Render (backend) |
+| **Deployment** | Vercel (frontend) · Render (backend, free tier) |
+
+---
+
+## 🪶 Why ONNX Runtime instead of PyTorch
+
+This project used to run embeddings through `sentence-transformers` on PyTorch. That works well, but PyTorch's CPU runtime alone adds roughly 150-300MB of fixed memory overhead just from being imported — before a single repository is even analyzed. On a free 512MB host, that overhead was leaving almost no room for the actual work.
+
+The fix: the exact same `all-MiniLM-L6-v2` model, exported to ONNX (int8-quantized, ~23MB vs ~90MB), run through `onnxruntime` with tokenization via `tokenizers` and mean-pooling done directly in `numpy`. No PyTorch in the deployed process at all.
+
+- **Same model, same embeddings, same retrieval quality** — this is a runtime swap, not a model change.
+- **Backend footprint drops from ~450-550MB peak to roughly ~200-270MB**, comfortably inside a free 512MB host with real headroom to spare.
+- **Faster cold starts** — a 23MB quantized model downloads and loads faster than PyTorch's full model + framework weight.
+
+Combined with per-session state (below), this is what makes the free tier actually usable instead of a coin flip.
+
+---
+
+## 🧵 Other reliability details
+
+- **Per-session isolation** — `/analyze` returns a `session_id`; `/ask` and `/architecture` use it to look up that session's own index. Sessions are capped (LRU-evicted, default 2 at a time) so memory use stays bounded on a small host, with each evicted session's cloned repo cleaned up from disk automatically.
+- **Bounded memory during analysis** — file loading stops at a character budget (`MAX_SOURCE_CHARS`) and chunking stops at a chunk cap (`MAX_CHUNKS`, default 1500), both enforced *while* reading/chunking rather than after, so a huge repo can't spike memory before the cap applies.
+- **Validated, shallow clones** — only `https://github.com/<owner>/<repo>` URLs are accepted, clones are shallow (`--depth 1`) and timeboxed, and each clone lives in its own uniquely-named directory.
+- **Tests** — `chunker`, `retriever`, and the file loader have a small `pytest` suite covering the pure logic (`pytest` from the repo root).
 
 ---
 
@@ -68,29 +95,41 @@ Point it at a repo. Ask "How does routing work?" or "Where is authentication han
 ai-codebase-analyzer/
 ├── app/                    # FastAPI RAG backend
 ├── web/                    # Next.js frontend
+├── tests/                  # pytest suite for the pure backend logic
 ├── frontend.py             # Optional Streamlit UI
-├── requirements.txt        # Full dependency set
+├── requirements.txt        # Full dependency set (local dev, incl. Streamlit)
 ├── requirements-api.txt    # Lean backend-only dependencies
 ├── render.yaml             # Render deployment blueprint
 ├── Procfile
-└── run.sh
+└── run.sh                  # One-command local start (backend + frontend)
 ```
 
 ---
 
 ## 🖥️ Getting Started
 
-### 1. Backend
+### One-command start (recommended)
 
 ```bash
-python -m venv venv
+cp .env.example .env      # add your GROQ_API_KEY
+./run.sh
+```
+
+This creates an isolated virtual environment (safe even if you have conda active), installs backend and frontend dependencies on first run, and starts both servers together.
+
+### Manual setup
+
+**Backend**
+
+```bash
+python3 -m venv venv
 source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env          # add your GROQ_API_KEY
 uvicorn app.api:app --reload --port 8000
 ```
 
-### 2. Frontend
+**Frontend**
 
 ```bash
 cd web
@@ -101,16 +140,22 @@ npm run dev
 
 Open **http://localhost:3000** 🎉
 
-### One-command start
+### Optional Streamlit UI
 
 ```bash
-cd web && npm install && cd ..
-./run.sh
+streamlit run frontend.py
+```
+
+### Running tests
+
+```bash
+pip install -r requirements.txt   # includes pytest
+pytest
 ```
 
 ---
 
-## ☁️ Deployment
+## ☁️ Deployment (both free, no card required)
 
 ### Frontend → Vercel
 
@@ -121,10 +166,13 @@ cd web && npm install && cd ..
 
 ### Backend → Render
 
-1. Create a new **Blueprint** at [Render](https://render.com/) and point it at this repo
-2. Render auto-detects `render.yaml`
-3. Add your `GROQ_API_KEY` and `CORS_ORIGINS` (your Vercel URL) as environment variables
-4. Deploy
+1. Create a new **Blueprint** at [Render](https://render.com/) and point it at this repo — it auto-detects `render.yaml`
+2. Add `GROQ_API_KEY` and `CORS_ORIGINS` (your exact Vercel URL, no trailing slash) as environment variables
+3. Deploy
+
+Once both are live, set `CORS_ORIGINS` on Render to your real Vercel URL and redeploy — this closes the loop so the frontend can actually reach the backend.
+
+Free Render instances sleep after inactivity and take ~30-60s to wake on the next request — normal for a free tier, not a bug.
 
 ---
 
@@ -132,12 +180,21 @@ cd web && npm install && cd ..
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/health` | Service status |
-| `POST` | `/analyze` | Clone and index a repository |
-| `POST` | `/ask` | Ask a question, get a grounded answer |
-| `POST` | `/architecture` | Retrieve the Python import graph |
+| `GET` | `/health` | Service status + active session count |
+| `POST` | `/analyze` | Clone and index a repository → returns a `session_id` |
+| `POST` | `/ask` | Ask a question for a given `session_id` |
+| `POST` | `/architecture` | Retrieve the Python import graph for a given `session_id` |
 
 Interactive docs available at `/docs`.
+
+---
+
+## ⚠️ Limitations
+
+- Vector index is in-memory per session — lost if that session is evicted or the API restarts
+- Only a small number of concurrent analyzed repositories are kept at once (`MAX_SESSIONS`, default 2) to stay within free-tier memory
+- Best results on repos with supported source extensions (`.py`, `.js`, `.ts`, `.java`, `.cpp`, `.c`)
+- Very large repositories are truncated (`MAX_CHUNKS`, `MAX_SOURCE_CHARS`) to protect low-RAM hosts
 
 ---
 

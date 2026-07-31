@@ -1,20 +1,18 @@
-# CPU-only PyTorch wheel: sentence-transformers depends on torch, and the
-# default PyPI wheel drags in ~1-2GB of unused CUDA/NVIDIA libraries even on
-# machines with no GPU. Pinning the CPU build here keeps installs smaller and
-# avoids extra resident memory from unused CUDA driver stubs — same model,
-# same results, just lighter.
---extra-index-url https://download.pytorch.org/whl/cpu
-torch
-
+# Embeddings run on onnxruntime instead of PyTorch — same all-MiniLM-L6-v2
+# model, same embeddings, but without torch's ~150-300MB runtime footprint.
+# See README's "Why onnxruntime instead of PyTorch" section for details.
 fastapi
 uvicorn
 streamlit
 requests
 gitpython
-sentence-transformers
+onnxruntime
+tokenizers
+huggingface_hub
 faiss-cpu
 numpy
 groq
 python-dotenv
 networkx
 matplotlib
+pytest

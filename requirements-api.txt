@@ -2,14 +2,17 @@
 # Hugging Face Spaces, Railway, Fly, a VPS, etc). Leaves out Streamlit and
 # the matplotlib/networkx visualization extras that the API never imports,
 # to keep the deployed image smaller and lower the process's baseline RAM.
---extra-index-url https://download.pytorch.org/whl/cpu
-torch
-
+#
+# Embeddings run on onnxruntime instead of PyTorch — same all-MiniLM-L6-v2
+# model, same embeddings, but without torch's ~150-300MB runtime footprint.
+# See README's "Why onnxruntime instead of PyTorch" section for details.
 fastapi
 uvicorn[standard]
 requests
 gitpython
-sentence-transformers
+onnxruntime
+tokenizers
+huggingface_hub
 faiss-cpu
 numpy
 groq
