@@ -13,6 +13,7 @@ export type AnalyzeResponse = {
   message: string;
   chunks: number;
   summary: RepoSummary;
+  session_id: string;
 };
 
 export type AskResponse = {
@@ -24,11 +25,18 @@ export type ArchitectureResponse = {
 };
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error(
+      `Can't reach the API at ${API_URL}. Is the backend running and reachable?`
+    );
+  }
 
   if (!res.ok) {
     let detail = `Request failed (${res.status})`;
@@ -52,12 +60,12 @@ export function analyzeRepo(repoUrl: string) {
   return postJson<AnalyzeResponse>("/analyze", { repo_url: repoUrl });
 }
 
-export function askQuestion(question: string) {
-  return postJson<AskResponse>("/ask", { question });
+export function askQuestion(question: string, sessionId: string) {
+  return postJson<AskResponse>("/ask", { question, session_id: sessionId });
 }
 
-export function fetchArchitecture(repoUrl: string) {
+export function fetchArchitecture(sessionId: string) {
   return postJson<ArchitectureResponse>("/architecture", {
-    repo_url: repoUrl,
+    session_id: sessionId,
   });
 }
