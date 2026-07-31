@@ -1,0 +1,5 @@
+These files were removed in this update (Dockerfile, Procfile, render.yaml,
+requirements-api.txt) since the project went back to local-only. After
+unzipping and copying the other files over, delete them:
+
+    rm -f Dockerfile Procfile render.yaml requirements-api.txt

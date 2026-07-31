@@ -51,6 +51,7 @@ export function AnalyzerApp() {
   const [repoUrl, setRepoUrl] = useState("https://github.com/pallets/flask");
   const [question, setQuestion] = useState("");
   const [summary, setSummary] = useState<RepoSummary | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [architecture, setArchitecture] = useState<Record<
     string,
     string[]
@@ -67,7 +68,7 @@ export function AnalyzerApp() {
   const [analyzing, setAnalyzing] = useState(false);
   const [asking, setAsking] = useState(false);
 
-  const ready = Boolean(summary);
+  const ready = Boolean(summary && sessionId);
   const filesCount = useCountUp(summary?.total_files ?? 0);
   const chunksCount = useCountUp(summary?.total_chunks ?? 0);
   const apiHost = useMemo(() => {
@@ -88,28 +89,33 @@ export function AnalyzerApp() {
     setAnalyzing(true);
     setAnalyzeStatus({
       type: "busy",
-      text: "Cloning, chunking, and building the vector index…",
+      text:
+        "Cloning, chunking, and building the vector index… " +
+        "Large repositories can take several minutes — progress is logged in the backend terminal.",
     });
     setAnswer("");
     setAskStatus(null);
     setArchitecture(null);
+    setSessionId(null);
 
     try {
       const data = await analyzeRepo(repoUrl.trim());
       setSummary(data.summary);
+      setSessionId(data.session_id);
       setAnalyzeStatus({
         type: "ok",
         text: `${data.message} · ${data.chunks} chunks indexed`,
       });
 
       try {
-        const arch = await fetchArchitecture(repoUrl.trim());
+        const arch = await fetchArchitecture(data.session_id);
         setArchitecture(arch.architecture);
       } catch {
         setArchitecture(null);
       }
     } catch (err) {
       setSummary(null);
+      setSessionId(null);
       setAnalyzeStatus({
         type: "err",
         text:
@@ -128,7 +134,7 @@ export function AnalyzerApp() {
       setAskStatus({ type: "err", text: "Type a question about the codebase." });
       return;
     }
-    if (!ready) {
+    if (!ready || !sessionId) {
       setAskStatus({
         type: "err",
         text: "Analyze a repository first so the index exists.",
@@ -144,7 +150,7 @@ export function AnalyzerApp() {
     setAnswer("");
 
     try {
-      const data = await askQuestion(question.trim());
+      const data = await askQuestion(question.trim(), sessionId);
       setAnswer(data.answer);
       setAskStatus({ type: "ok", text: "Answer grounded in retrieved code." });
     } catch (err) {

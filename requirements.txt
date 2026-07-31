@@ -1,14 +1,9 @@
-# Embeddings run on onnxruntime instead of PyTorch — same all-MiniLM-L6-v2
-# model, same embeddings, but without torch's ~150-300MB runtime footprint.
-# See README's "Why onnxruntime instead of PyTorch" section for details.
 fastapi
 uvicorn
 streamlit
 requests
 gitpython
-onnxruntime
-tokenizers
-huggingface_hub
+sentence-transformers
 faiss-cpu
 numpy
 groq
