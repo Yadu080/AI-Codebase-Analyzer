@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-from app.architecture import build_dependency_graph
 import networkx as nx
 import matplotlib.pyplot as plt
 import os
@@ -386,6 +385,7 @@ if st.button("⟶  Analyze Repository"):
         if response.status_code == 200:
             data = response.json()
             summary = data["summary"]
+            st.session_state["session_id"] = data["session_id"]
 
             st.success("✓ Repository indexed successfully")
 
@@ -420,26 +420,34 @@ if st.button("⟶  Analyze Repository"):
                 {modules_html}
             </div>
             """, unsafe_allow_html=True)
-            repo_name = repo_url.split("/")[-1]
-            repo_path = os.path.join("data", repo_name)
-            graph = build_dependency_graph(repo_path)
-            st.subheader("Repository Dependency Graph")
+            arch_response = requests.post(
+                f"{API_URL}/architecture",
+                json={"session_id": data["session_id"]},
+            )
+            if arch_response.status_code == 200:
+                graph = arch_response.json()["architecture"]
+                st.subheader("Repository Dependency Graph")
 
-            for file, deps in graph.items():
-                st.write(f"{file} → {deps}")
-            G = nx.DiGraph()
+                for file, deps in graph.items():
+                    st.write(f"{file} → {deps}")
+                G = nx.DiGraph()
 
-            for file, deps in graph.items():
-                for dep in deps:
-                    G.add_edge(file, dep)
+                for file, deps in graph.items():
+                    for dep in deps:
+                        G.add_edge(file, dep)
 
-            fig, ax = plt.subplots()
-            nx.draw(G, with_labels=True, node_size=2000, node_color="lightblue", ax=ax)
+                fig, ax = plt.subplots()
+                nx.draw(G, with_labels=True, node_size=2000, node_color="lightblue", ax=ax)
 
-            st.pyplot(fig)
+                st.pyplot(fig)
 
         else:
-            st.error("✗ Failed to analyze repository. Check the URL and try again.")
+            detail = ""
+            try:
+                detail = response.json().get("detail", "")
+            except Exception:
+                pass
+            st.error(f"✗ Failed to analyze repository. {detail}")
 
 # ─── DIVIDER ──────────────────────────────────────────────────────────────────
 st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
@@ -460,17 +468,21 @@ question = st.text_input(
 )
 
 if st.button("⟶  Ask AI"):
-    with st.spinner("Retrieving context and generating answer..."):
-        response = requests.post(
-            f"{API_URL}/ask",
-            json={"question": question}
-        )
+    session_id = st.session_state.get("session_id")
+    if not session_id:
+        st.error("✗ Analyze a repository first.")
+    else:
+        with st.spinner("Retrieving context and generating answer..."):
+            response = requests.post(
+                f"{API_URL}/ask",
+                json={"question": question, "session_id": session_id}
+            )
 
-        if response.status_code == 200:
-            answer = response.json()["answer"]
-            st.markdown(f'<div class="answer-box">{answer}</div>', unsafe_allow_html=True)
-        else:
-            st.error("✗ Error getting answer from API. Make sure the repository is indexed first.")
+            if response.status_code == 200:
+                answer = response.json()["answer"]
+                st.markdown(f'<div class="answer-box">{answer}</div>', unsafe_allow_html=True)
+            else:
+                st.error("✗ Error getting answer from API. Make sure the repository is indexed first.")
 
 # ─── FOOTER ───────────────────────────────────────────────────────────────────
 st.markdown("""
