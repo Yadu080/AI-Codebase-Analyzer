@@ -1,6 +1,14 @@
+import logging
 import os
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
+
+# Skip the optional accelerated download client — it's extra memory/process
+# overhead we don't need for a single small model file on a RAM-constrained
+# host. Must be set before huggingface_hub is imported.
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 # Pre-converted ONNX build of sentence-transformers/all-MiniLM-L6-v2 — same
 # model weights, same embeddings, just packaged for onnxruntime instead of
@@ -26,15 +34,38 @@ def _load():
     from tokenizers import Tokenizer
     import onnxruntime as ort
 
+    logger.info("Downloading embedding model %s/%s...", _MODEL_REPO, _MODEL_FILE)
     model_path = hf_hub_download(repo_id=_MODEL_REPO, filename=_MODEL_FILE)
+    logger.info("Model downloaded to %s", model_path)
+
     tokenizer_path = hf_hub_download(repo_id=_MODEL_REPO, filename="tokenizer.json")
+    logger.info("Tokenizer downloaded to %s", tokenizer_path)
 
     tokenizer = Tokenizer.from_file(tokenizer_path)
     tokenizer.enable_truncation(max_length=_MAX_SEQ_LENGTH)
     pad_id = tokenizer.token_to_id("[PAD]") or 0
     tokenizer.enable_padding(pad_id=pad_id, pad_token="[PAD]")
+    logger.info("Tokenizer ready")
 
-    session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+    # Full graph optimization can transiently use significantly more memory
+    # during session creation than the model itself needs at rest — basic
+    # optimization is enough for a model this small and keeps that spike
+    # from happening on a 512MB host. Single-threaded since a free instance
+    # typically has one CPU anyway, and each onnxruntime thread reserves its
+    # own scratch buffers.
+    session_options = ort.SessionOptions()
+    session_options.intra_op_num_threads = 1
+    session_options.inter_op_num_threads = 1
+    session_options.graph_optimization_level = (
+        ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
+    )
+
+    logger.info("Creating ONNX Runtime session...")
+    session = ort.InferenceSession(
+        model_path, sess_options=session_options, providers=["CPUExecutionProvider"]
+    )
+    logger.info("ONNX Runtime session ready")
+
     input_names = {i.name for i in session.get_inputs()}
 
     _session, _tokenizer, _input_names = session, tokenizer, input_names
