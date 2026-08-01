@@ -67,6 +67,8 @@ Each analysis gets its own `session_id`, so indexes never collide and you can an
 | **LLM** | Groq `llama-3.3-70b-versatile` |
 
 ---
+## Check demo live
+- **link: [check out!] → https://democodebaseanalyser-q.streamlit.app/
 
 ## 🖥️ Running it locally
 
